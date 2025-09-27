@@ -13,7 +13,7 @@ func main() {
 	t0 := time.Now()
 
 	fmt.Println("starting...")
-	scenario_3a()
+	scenario_4a()
 	fmt.Printf("exited (%s)\n", time.Since(t0))
 }
 
@@ -114,6 +114,67 @@ func scenario_4() {
 	// 2025/09/27 09:27:51 Task 1 done
 	// 2025/09/27 09:27:51 All tasks completed
 	// exited (2.002275667s)
+}
+
+func scenario_4a() {
+	fmt.Println("scenario: non-blocking with waiting using worker group (with data over closure)")
+
+	// create a pool with 5 workers, non-blocking
+	pool, _ := ants.NewPool(0, ants.WithNonblocking(true))
+	defer pool.Release()
+
+	var wg sync.WaitGroup
+	taskCount := 10
+
+	counter := 0
+	for i := 0; i < taskCount; i++ {
+		idx := i
+		wg.Add(1)
+		inLoopCounter := counter
+		// err must be ignored, because with non-blocking mode (https://pkg.go.dev/github.com/panjf2000/ants/v2#Options)
+		_ = pool.Submit(func() {
+			counter++
+			internalCounter := counter
+
+			defer wg.Done()
+			log.Printf("Task %d starting\n", idx)
+			time.Sleep(2 * time.Second)
+			log.Printf("Task %d done (counter: %d; in_loop_counter: %d; internal_counter: %d)\n", idx, counter, inLoopCounter, internalCounter)
+		})
+	}
+
+	// doing other stuff
+	log.Println("doing other stuff")
+
+	// wait for all tasks to complete
+	wg.Wait()
+	log.Println("All tasks completed")
+
+	// starting...
+	// scenario: non-blocking with waiting using worker group (with data over closure)
+	// 2025/09/27 09:38:07 Task 0 starting
+	// 2025/09/27 09:38:07 Task 7 starting
+	// 2025/09/27 09:38:07 Task 9 starting
+	// 2025/09/27 09:38:07 Task 4 starting
+	// 2025/09/27 09:38:07 Task 5 starting
+	// 2025/09/27 09:38:07 Task 6 starting
+	// 2025/09/27 09:38:07 Task 1 starting
+	// 2025/09/27 09:38:07 Task 8 starting
+	// 2025/09/27 09:38:07 Task 2 starting
+	// 2025/09/27 09:38:07 Task 3 starting
+	// 2025/09/27 09:38:07 doing other stuff
+	// 2025/09/27 09:38:09 Task 4 done (counter: 10; in_loop_counter: 0; internal_counter: 3)
+	// 2025/09/27 09:38:09 Task 6 done (counter: 10; in_loop_counter: 1; internal_counter: 7)
+	// 2025/09/27 09:38:09 Task 3 done (counter: 10; in_loop_counter: 0; internal_counter: 10)
+	// 2025/09/27 09:38:09 Task 1 done (counter: 10; in_loop_counter: 0; internal_counter: 8)
+	// 2025/09/27 09:38:09 Task 8 done (counter: 10; in_loop_counter: 1; internal_counter: 6)
+	// 2025/09/27 09:38:09 Task 2 done (counter: 10; in_loop_counter: 0; internal_counter: 9)
+	// 2025/09/27 09:38:09 Task 5 done (counter: 10; in_loop_counter: 1; internal_counter: 4)
+	// 2025/09/27 09:38:09 Task 7 done (counter: 10; in_loop_counter: 1; internal_counter: 5)
+	// 2025/09/27 09:38:09 Task 9 done (counter: 10; in_loop_counter: 1; internal_counter: 2)
+	// 2025/09/27 09:38:09 Task 0 done (counter: 10; in_loop_counter: 0; internal_counter: 1)
+	// 2025/09/27 09:38:09 All tasks completed
+	// exited (2.001664584s)
 }
 
 func scenario_3a() {
