@@ -38,18 +38,17 @@ func TestGracegoDelegator_Executions(t *testing.T) {
 
 	// should execute tasks and wait for completion on shutdown
 	t.Run("execute tasks", func(t *testing.T) {
-		out := New(5, 25)
+		t0 := time.Now()
+		log.Printf("start time: %s\n", t0.Format(time.RFC3339Nano))
+		out := New(2, 250)
 		require.NotNil(t, out)
 		out.Start()
 
 		ctr := &counter{}
-		for i := 0; i < 25; i++ {
-			log.Printf("publishing task %d\n", i)
+		for i := 0; i < 250; i++ {
 			err := out.Submit(func(ctx context.Context) {
-				counter := i
 				time.Sleep(1 * time.Millisecond) // simulate work
 				ctr.inc()                        // simulate work
-				log.Printf("has run task %d\n", counter)
 			})
 			assert.NoError(t, err)
 		}
@@ -59,8 +58,7 @@ func TestGracegoDelegator_Executions(t *testing.T) {
 		assert.NoError(t, err)
 
 		// should have all tasks executed
-		log.Println("all tasks processed, checking results...")
-		assert.Equal(t, 25, ctr.count())
+		assert.Equal(t, 250, ctr.count())
 	})
 
 	// // should return error when queue is full

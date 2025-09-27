@@ -17,22 +17,21 @@ type TaskFunc func(ctx context.Context)
 type GracegoDelegator struct {
 	pool *ants.Pool
 
-	// ctx    context.Context
+	ctx    context.Context
 	cancel context.CancelFunc
+
 	wgexec sync.WaitGroup
 
-	mxactive sync.Mutex
-	active   bool
+	mxactive   sync.Mutex
+	flagactive bool
 
-	onceshutdown  sync.Once
-	chbuftasks    chan TaskFunc
-	chsigshutdown chan struct{}
-	// chflagdrained chan struct{}
+	chbuftasks chan TaskFunc
 }
 
 // New creates a delegator with bounded concurrency and queue size.
 func New(concurrency, maxQueueSize int) *GracegoDelegator {
-	// ctx, cancel := context.WithCancel(context.Background())
+	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
+	ctx, cancel := context.WithCancel(context.Background())
 
 	pool, err := ants.NewPool(
 		concurrency,
@@ -44,79 +43,62 @@ func New(concurrency, maxQueueSize int) *GracegoDelegator {
 	}
 
 	return &GracegoDelegator{
-		// ctx:        ctx,
+		ctx:    ctx,
+		cancel: cancel,
+
 		pool:       pool,
 		chbuftasks: make(chan TaskFunc, maxQueueSize),
-		// cancel:     cancel,
 	}
+}
+
+func (d *GracegoDelegator) isactive() bool {
+	d.mxactive.Lock()
+	defer d.mxactive.Unlock()
+	return d.flagactive
+}
+
+func (d *GracegoDelegator) setactive(active bool) {
+	d.mxactive.Lock()
+	defer d.mxactive.Unlock()
+	d.flagactive = active
 }
 
 // Start begins dispatchment of tasks into the worker pool.
 func (d *GracegoDelegator) Start() {
 	// prevent multiple starts
-	d.mxactive.Lock()
-	if d.active {
-		d.mxactive.Unlock()
+	if d.isactive() {
 		return
 	}
-	d.active = true
-	d.mxactive.Unlock()
+	defer d.setactive(true)
 
 	// start event loop
 	go func() {
-		submitTask := func(task TaskFunc) {
-			d.wgexec.Add(1)
+		delegate := func(task TaskFunc) {
+			log.Println("delegate: delegating task to pool worker")
 			_ = d.pool.Submit(func() {
 				defer d.wgexec.Done()
-				// task(d.ctx)
-				task(context.Background())
-				log.Println("submit: task executed")
+				log.Println("delegate: task execution: started")
+				task(d.ctx)
+				log.Println("delegate: task execution: completed")
 			})
-			log.Println("submit: task submitted to pool")
+			log.Println("delegate: task delegated!")
 		}
+
 		for {
 			select {
 			case task := <-d.chbuftasks:
-				submitTask(task)
-			case <-d.chsigshutdown:
-				d.wgexec.Wait()
-
-				d.mxactive.Lock()
-				d.active = false
-				d.mxactive.Unlock()
-				return
-			}
-		}
-	}()
-
-	go func() {
-		submitTask := func(task TaskFunc) {
-			d.wgexec.Add(1)
-			_ = d.pool.Submit(func() {
-				defer d.wgexec.Done()
-				// task(d.ctx)
-				task(context.Background())
-				log.Println("submit: task executed")
-			})
-			log.Println("submit: task submitted to pool")
-		}
-		for {
-			select {
-			// case <-d.ctx.Done():
-			// 	// drain remaining tasks
-			// 	log.Printf("event_loop: will drain %d remaining tasks...\n", len(d.chbuftasks))
-			// 	for task := range d.chbuftasks {
-			// 		submitTask(task)
-			// 	}
-			// 	log.Println("event_loop: all remaining tasks drained")
-			// 	return
-			case task, ok := <-d.chbuftasks:
-				if !ok {
-					log.Println("event_loop: channel closed")
-					return
+				log.Println("event loop: picked new task")
+				delegate(task)
+			case <-d.ctx.Done():
+				log.Println("event loop: received shutdown signal")
+				log.Printf("event loop: delegating remaining %d tasks", len(d.chbuftasks))
+				for v := range d.chbuftasks {
+					log.Println("event loop: force pushing new task (drain)")
+					delegate(v)
 				}
-				log.Println("event_loop: received a task")
-				submitTask(task)
+				d.wgexec.Wait()
+				log.Println("event loop: all tasks completed")
+				return
 			}
 		}
 	}()
@@ -126,9 +108,11 @@ func (d *GracegoDelegator) Start() {
 // It will return ErrQueueFull if the buffer maximum queue size is full.
 func (d *GracegoDelegator) Submit(task TaskFunc) error {
 	select {
-	// case <-d.ctx.Done():
-	// 	return context.Canceled
+	case <-d.ctx.Done():
+		return context.Canceled
 	case d.chbuftasks <- task:
+		d.wgexec.Add(1)
+		log.Printf("submit: received new task\n")
 		return nil
 	default:
 		return ErrQueueFull
@@ -138,25 +122,10 @@ func (d *GracegoDelegator) Submit(task TaskFunc) error {
 // Shutdown gracefully stops accepting tasks and waits for completion or timeout.
 // If timeout is zero, it waits until all tasks are completed.
 func (d *GracegoDelegator) Shutdown() error {
-	var err error
-	d.onceshutdown.Do(func() {
-		log.Println("shutdown: shutting down delegator...")
-
-		// close channel and end context
-		close(d.chbuftasks)
-		// d.cancel()
-
-		// wait for all tasks to complete
-		done := make(chan struct{})
-		go func() {
-			log.Println("shutdown: waiting for all tasks to complete...")
-			d.wgexec.Wait()
-			log.Println("shutdown: all tasks drained")
-			d.pool.Release()
-			close(done)
-		}()
-
-		<-done
-	})
-	return err
+	log.Printf("shutdown: fired\n")
+	d.cancel()
+	log.Printf("shutdown: waiting for exec done\n")
+	d.wgexec.Wait()
+	log.Printf("shutdown: exec done\n")
+	return nil
 }
