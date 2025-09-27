@@ -13,8 +13,51 @@ func main() {
 	t0 := time.Now()
 
 	fmt.Println("starting...")
-	scenario_4()
+	scenario_5()
 	fmt.Printf("exited (%s)\n", time.Since(t0))
+}
+
+func scenario_5() {
+	fmt.Println("scenario: non-blocking with waiting without worker group")
+
+	// create a pool with 5 workers, non-blocking
+	pool, _ := ants.NewPool(5, ants.WithNonblocking(true))
+	defer pool.Release()
+
+	taskCount := 10
+	done := make(chan struct{}, taskCount)
+
+	for i := 0; i < taskCount; i++ {
+		idx := i
+		_ = pool.Submit(func() {
+			log.Printf("Task %d starting\n", idx)
+			time.Sleep(2 * time.Second)
+			log.Printf("Task %d done\n", idx)
+			done <- struct{}{}
+		})
+	}
+
+	log.Println("doing other stuff")
+
+	// wait for all tasks to complete
+	for i := 0; i < taskCount; i++ {
+		<-done
+	}
+	log.Println("All tasks completed")
+
+	// starting...
+	// scenario: non-blocking with waiting without worker group
+	// 2025/09/27 09:30:52 doing other stuff
+	// 2025/09/27 09:30:52 Task 3 starting
+	// 2025/09/27 09:30:52 Task 1 starting
+	// 2025/09/27 09:30:52 Task 0 starting
+	// 2025/09/27 09:30:52 Task 2 starting
+	// 2025/09/27 09:30:52 Task 4 starting
+	// 2025/09/27 09:30:54 Task 4 done
+	// 2025/09/27 09:30:54 Task 2 done
+	// 2025/09/27 09:30:54 Task 0 done
+	// 2025/09/27 09:30:54 Task 3 done
+	// 2025/09/27 09:30:54 Task 1 done
 }
 
 func scenario_4() {
