@@ -150,3 +150,72 @@ func (c *counter) count() int {
 	})
 	return count
 }
+
+func TestGracegoDelegator_ShutdownWithTimeout(t *testing.T) {
+	makedel := func() *GracegoDelegator {
+		del := New(2, 50)
+		require.NotNil(t, del)
+		return del
+	}
+
+	// should shutdown fine with timeout
+	t.Run("shutdown with timeout", func(t *testing.T) {
+		del := makedel()
+
+		for i := 0; i < 50; i++ {
+			err := del.Submit(func(ctx context.Context) {
+				time.Sleep(1 * time.Second) // simulate work
+			})
+			assert.NoError(t, err)
+		}
+
+		// should not accept new tasks after shutdown
+		del.Start()
+		err := del.ShutdownWithTimeout(1 * time.Millisecond)
+		assert.ErrorIs(t, err, context.DeadlineExceeded)
+	})
+
+	// should shutdown fine with zero timeout (cancel immediately)
+	t.Run("shutdown with zero timeout should cancel immediately", func(t *testing.T) {
+		del := makedel()
+
+		ctr := &counter{}
+		for i := 0; i < 5; i++ {
+			err := del.Submit(func(ctx context.Context) {
+				time.Sleep(1 * time.Second) // simulate work
+				ctr.inc()                   // simulate work
+			})
+			assert.NoError(t, err)
+		}
+
+		// should not accept new tasks after shutdown
+		del.Start()
+		err := del.ShutdownWithTimeout(0)
+		assert.ErrorIs(t, err, context.Canceled)
+
+		// should have some tasks executed (not all, since we cancelled immediately)
+		assert.Equal(t, ctr.count(), 0)
+	})
+
+	// should shutdown fine with negative timeout (wait indefinitely)
+	t.Run("shutdown with negative timeout", func(t *testing.T) {
+		del := makedel()
+
+		ctr := &counter{}
+		for i := 0; i < 5; i++ {
+			err := del.Submit(func(ctx context.Context) {
+				time.Sleep(1 * time.Millisecond) // simulate work
+				ctr.inc()                        // simulate work
+			})
+			assert.NoError(t, err)
+		}
+
+		// should not accept new tasks after shutdown
+		del.Start()
+		err := del.ShutdownWithTimeout(-1)
+		assert.NoError(t, err)
+
+		// should have all tasks executed
+		assert.Equal(t, 5, ctr.count())
+	})
+}

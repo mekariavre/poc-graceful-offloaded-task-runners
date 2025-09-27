@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"time"
 
 	"github.com/panjf2000/ants/v2"
 )
@@ -98,7 +99,6 @@ func (d *GracegoDelegator) Start() {
 					delegate(v)
 				}
 				d.wgexec.Wait()
-				d.pool.Release()
 				log.Println("event loop: all tasks completed")
 				return
 			}
@@ -127,13 +127,47 @@ func (d *GracegoDelegator) Submit(task TaskFunc) error {
 	}
 }
 
-// Shutdown gracefully stops accepting tasks and waits for completion or timeout.
-// If timeout is zero, it waits until all tasks are completed.
+// Shutdown gracefully stops accepting tasks and waits for completion.
 func (d *GracegoDelegator) Shutdown() error {
-	log.Printf("shutdown: fired\n")
-	d.cancel()
-	log.Printf("shutdown: waiting for exec done\n")
-	d.wgexec.Wait()
-	log.Printf("shutdown: exec done\n")
-	return nil
+	return d.ShutdownWithTimeout(-1)
+}
+
+// Shutdown gracefully stops accepting tasks and waits for completion or timeout.
+// If timeout is zero, it cancels all running tasks immediately.
+// If timeout is negative, it waits until all tasks are completed.
+func (d *GracegoDelegator) ShutdownWithTimeout(timeout time.Duration) error {
+	ctx := context.Background()
+	switch {
+	case timeout > 0:
+		// wait with timeout
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+	case timeout == 0:
+		// immediate cancel
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithCancel(context.Background())
+		cancel()
+	}
+
+	defer d.pool.Release() // ensure free pool resources
+
+	// channelize a wgexec wait
+	done := make(chan struct{})
+	go func() {
+		d.cancel() // cancel internal context
+		d.wgexec.Wait()
+		close(done)
+		log.Printf("shutdown: all tasks completed\n")
+	}()
+
+	// wait for signals
+	select {
+	case <-done:
+		log.Printf("shutdown: done gracefully\n")
+		return nil
+	case <-ctx.Done():
+		log.Printf("shutdown: timeout reached, abrupt shutdown\n")
+		return ctx.Err()
+	}
 }
