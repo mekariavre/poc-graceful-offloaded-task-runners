@@ -15,11 +15,80 @@ func main() {
 	t0 := time.Now()
 
 	fmt.Println("starting...")
-	scenario_6()
+	scenario_7()
 	log.Printf("exited (%s)\n", time.Since(t0))
 }
 
+func scenario_7() {
+	// using gracego delegator, running after main function exits
+	delegator := gracego.New(4, 10000) // 4 workers, queue size 10000 task items
+	delegator.Start()
+
+	mainstuff := func(index, childnum int) {
+		log.Println("doing main stuff here!")
+		// spawn some tasks
+		for i := 0; i < childnum; i++ {
+			parentidx := index
+			childidx := i
+			_ = delegator.Submit(func(ctx context.Context) {
+				log.Printf("main stuff %d - child task %d started\n", parentidx, childidx)
+				time.Sleep(2 * time.Second)
+				log.Printf("main stuff %d - child task %d finished\n", parentidx, childidx)
+			})
+		}
+		log.Println("doing clean up for main stuff here!")
+	}
+
+	mainstuff(1, 5)
+	mainstuff(2, 3)
+	mainstuff(3, 7)
+
+	if err := delegator.Shutdown(); err != nil {
+		log.Println("Shutdown error:", err)
+	}
+
+	// starting...
+	// 2025/09/27 17:25:04.400431 doing main stuff here!
+	// 2025/09/27 17:25:04.400612 doing clean up for main stuff here!
+	// 2025/09/27 17:25:04.400613 doing main stuff here!
+	// 2025/09/27 17:25:04.400614 doing clean up for main stuff here!
+	// 2025/09/27 17:25:04.400615 doing main stuff here!
+	// 2025/09/27 17:25:04.400616 doing clean up for main stuff here!
+	// 2025/09/27 17:25:04.400634 main stuff 1 - child task 0 started
+	// 2025/09/27 17:25:04.400640 main stuff 1 - child task 2 started
+	// 2025/09/27 17:25:04.400637 main stuff 1 - child task 3 started
+	// 2025/09/27 17:25:04.400638 main stuff 1 - child task 1 started
+	// 2025/09/27 17:25:06.401425 main stuff 1 - child task 3 finished
+	// 2025/09/27 17:25:06.401440 main stuff 1 - child task 1 finished
+	// 2025/09/27 17:25:06.401474 main stuff 1 - child task 2 finished
+	// 2025/09/27 17:25:06.401476 main stuff 1 - child task 0 finished
+	// 2025/09/27 17:25:06.401496 main stuff 1 - child task 4 started
+	// 2025/09/27 17:25:06.401538 main stuff 2 - child task 0 started
+	// 2025/09/27 17:25:06.401543 main stuff 2 - child task 1 started
+	// 2025/09/27 17:25:06.401537 main stuff 2 - child task 2 started
+	// 2025/09/27 17:25:08.401549 main stuff 1 - child task 4 finished
+	// 2025/09/27 17:25:08.401626 main stuff 2 - child task 2 finished
+	// 2025/09/27 17:25:08.401642 main stuff 3 - child task 1 started
+	// 2025/09/27 17:25:08.401651 main stuff 2 - child task 0 finished
+	// 2025/09/27 17:25:08.401658 main stuff 3 - child task 2 started
+	// 2025/09/27 17:25:08.401664 main stuff 3 - child task 0 started
+	// 2025/09/27 17:25:08.401692 main stuff 2 - child task 1 finished
+	// 2025/09/27 17:25:08.401701 main stuff 3 - child task 3 started
+	// 2025/09/27 17:25:10.401721 main stuff 3 - child task 0 finished
+	// 2025/09/27 17:25:10.401811 main stuff 3 - child task 4 started
+	// 2025/09/27 17:25:10.401732 main stuff 3 - child task 1 finished
+	// 2025/09/27 17:25:10.401861 main stuff 3 - child task 5 started
+	// 2025/09/27 17:25:10.401757 main stuff 3 - child task 2 finished
+	// 2025/09/27 17:25:10.401868 main stuff 3 - child task 6 started
+	// 2025/09/27 17:25:10.401766 main stuff 3 - child task 3 finished
+	// 2025/09/27 17:25:12.401889 main stuff 3 - child task 5 finished
+	// 2025/09/27 17:25:12.401923 main stuff 3 - child task 4 finished
+	// 2025/09/27 17:25:12.401939 main stuff 3 - child task 6 finished
+	// 2025/09/27 17:25:12.401960 exited (8.00154525s)
+}
+
 func scenario_6() {
+	// using gracego delegator
 	delegator := gracego.New(4, 10000) // 4 workers, queue size 10000 task items
 	delegator.Start()
 
