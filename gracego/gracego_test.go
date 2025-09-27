@@ -139,7 +139,6 @@ type counter struct {
 func (c *counter) inc() {
 	randkey := gonanoid.Must(10)
 	c.sm.Store(randkey, struct{}{})
-	// log.Printf("counter inc: %s total: %d\n", randkey, c.count())
 }
 
 func (c *counter) count() int {

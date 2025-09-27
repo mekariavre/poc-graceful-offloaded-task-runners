@@ -75,31 +75,31 @@ func (d *GracegoDelegator) Start() {
 	// start event loop
 	go func() {
 		delegate := func(task TaskFunc) {
-			log.Println("delegate: delegating task to pool worker")
+			// log.Println("delegate: delegating task to pool worker")
 			_ = d.pool.Submit(func() {
 				defer d.wgexec.Done()
-				log.Println("delegate: task execution: started")
+				// log.Println("delegate: task execution: started")
 				task(d.ctx)
-				log.Println("delegate: task execution: completed")
+				// log.Println("delegate: task execution: completed")
 			})
-			log.Println("delegate: task delegated!")
+			// log.Println("delegate: task delegated!")
 		}
 
 		for {
 			select {
 			case task := <-d.chbuftasks:
-				log.Println("event loop: picked new task")
+				// log.Println("event loop: picked new task")
 				delegate(task)
 			case <-d.ctx.Done():
-				log.Println("event loop: received shutdown signal")
-				log.Printf("event loop: delegating remaining %d tasks", len(d.chbuftasks))
+				// log.Println("event loop: received shutdown signal")
+				// log.Printf("event loop: delegating remaining %d tasks", len(d.chbuftasks))
 				close(d.chbuftasks)
 				for v := range d.chbuftasks {
-					log.Println("event loop: force pushing new task (drain)")
+					// log.Println("event loop: force pushing new task (drain)")
 					delegate(v)
 				}
 				d.wgexec.Wait()
-				log.Println("event loop: all tasks completed")
+				// log.Println("event loop: all tasks completed")
 				return
 			}
 		}
@@ -120,7 +120,7 @@ func (d *GracegoDelegator) Submit(task TaskFunc) error {
 	select {
 	case d.chbuftasks <- task:
 		d.wgexec.Add(1)
-		log.Printf("submit: received new task\n")
+		// log.Printf("submit: received new task\n")
 		return nil
 	default:
 		return ErrQueueFull
@@ -158,16 +158,16 @@ func (d *GracegoDelegator) ShutdownWithTimeout(timeout time.Duration) error {
 		d.cancel() // cancel internal context
 		d.wgexec.Wait()
 		close(done)
-		log.Printf("shutdown: all tasks completed\n")
+		// log.Printf("shutdown: all tasks completed\n")
 	}()
 
 	// wait for signals
 	select {
 	case <-done:
-		log.Printf("shutdown: done gracefully\n")
+		// log.Printf("shutdown: done gracefully\n")
 		return nil
 	case <-ctx.Done():
-		log.Printf("shutdown: timeout reached, abrupt shutdown\n")
+		// log.Printf("shutdown: timeout reached, abrupt shutdown\n")
 		return ctx.Err()
 	}
 }
