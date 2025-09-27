@@ -13,7 +13,7 @@ func main() {
 	t0 := time.Now()
 
 	fmt.Println("starting...")
-	scenario_5()
+	scenario_3a()
 	fmt.Printf("exited (%s)\n", time.Since(t0))
 }
 
@@ -114,6 +114,32 @@ func scenario_4() {
 	// 2025/09/27 09:27:51 Task 1 done
 	// 2025/09/27 09:27:51 All tasks completed
 	// exited (2.002275667s)
+}
+
+func scenario_3a() {
+	fmt.Println("scenario: without waiting & non-blocking (with data over closure)")
+	// create a pool with 5 workers
+	pool, _ := ants.NewPool(5, ants.WithNonblocking(true))
+	defer pool.Release()
+
+	// submit tasks non-blocking, ignore error if pool is full
+	counter := 0
+	for i := 0; i < 20; i++ {
+		idx := i
+		_ = pool.Submit(func() {
+			counter++
+			time.Sleep(5000 * time.Millisecond)
+			log.Printf("Task %d done (counter: %d)\n", idx)
+		})
+	}
+
+	// immediately return, not waiting for tasks
+	log.Println("main function continues immediately")
+
+	// starting...
+	// scenario: without waiting & non-blocking (with data over closure)
+	// 2025/09/27 09:35:07 main function continues immediately
+	// exited (122.75µs)
 }
 
 func scenario_3() {
