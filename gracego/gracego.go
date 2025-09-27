@@ -92,6 +92,7 @@ func (d *GracegoDelegator) Start() {
 			case <-d.ctx.Done():
 				log.Println("event loop: received shutdown signal")
 				log.Printf("event loop: delegating remaining %d tasks", len(d.chbuftasks))
+				close(d.chbuftasks)
 				for v := range d.chbuftasks {
 					log.Println("event loop: force pushing new task (drain)")
 					delegate(v)
@@ -108,9 +109,15 @@ func (d *GracegoDelegator) Start() {
 // Submit enqueues a task non-blockingly.
 // It will return ErrQueueFull if the buffer maximum queue size is full.
 func (d *GracegoDelegator) Submit(task TaskFunc) error {
+	// check if already shutdown
 	select {
 	case <-d.ctx.Done():
 		return context.Canceled
+	default:
+	}
+
+	// try to enqueue task
+	select {
 	case d.chbuftasks <- task:
 		d.wgexec.Add(1)
 		log.Printf("submit: received new task\n")

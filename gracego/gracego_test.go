@@ -89,6 +89,26 @@ func TestGracegoDelegator_Executions(t *testing.T) {
 		require.NotZero(t, errcount)
 	})
 
+	// should return error when submitting after shutdown
+	t.Run("submit after shutdown", func(t *testing.T) {
+		del := New(2, 5)
+		require.NotNil(t, del)
+		del.Start()
+		require.NoError(t, del.Shutdown())
+
+		err := del.Submit(func(ctx context.Context) {})
+		assert.ErrorIs(t, err, context.Canceled)
+	})
+
+	// coverage boost: double start
+	t.Run("double start", func(t *testing.T) {
+		out := New(2, 5)
+		require.NotNil(t, out)
+		out.Start()
+		out.Start() // should be no-op
+		require.NoError(t, out.Shutdown())
+	})
+
 	// coverage boost: task drained before shutdown
 	t.Run("drain before shutdown", func(t *testing.T) {
 		out := New(2, 5) // small queue
