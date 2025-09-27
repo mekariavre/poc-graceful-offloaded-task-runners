@@ -12,29 +12,29 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// func TestNew(t *testing.T) {
-// 	// should create a valid delegator
-// 	t.Run("ok", func(t *testing.T) {
-// 		out := New(2, 10)
-// 		assert.NotNil(t, out)
-// 	})
+func TestNew(t *testing.T) {
+	// should create a valid delegator
+	t.Run("ok", func(t *testing.T) {
+		out := New(2, 10)
+		assert.NotNil(t, out)
+	})
 
-// 	// should panic on invalid params
-// 	t.Run("panic on invalid params", func(t *testing.T) {
-// 		assert.Panics(t, func() {
-// 			_ = New(-10, 10) // invalid concurrency
-// 		})
-// 	})
-// }
+	// should panic on invalid params
+	t.Run("panic on invalid params", func(t *testing.T) {
+		assert.Panics(t, func() {
+			_ = New(-10, 10) // invalid concurrency
+		})
+	})
+}
 
 func TestGracegoDelegator_Executions(t *testing.T) {
-	// // should start fine
-	// t.Run("ok", func(t *testing.T) {
-	// 	out := New(2, 10)
-	// 	require.NotNil(t, out)
+	// should start fine
+	t.Run("ok", func(t *testing.T) {
+		out := New(2, 10)
+		require.NotNil(t, out)
 
-	// 	out.Start()
-	// })
+		out.Start()
+	})
 
 	// should execute tasks and wait for completion on shutdown
 	t.Run("execute tasks", func(t *testing.T) {
@@ -61,47 +61,53 @@ func TestGracegoDelegator_Executions(t *testing.T) {
 		assert.Equal(t, 250, ctr.count())
 	})
 
-	// // should return error when queue is full
-	// t.Run("queue full", func(t *testing.T) {
-	// 	out := New(2, 5) // small queue
-	// 	require.NotNil(t, out)
-	// 	out.Start()
+	// should return error when queue is full
+	t.Run("queue full", func(t *testing.T) {
+		out := New(1, 3) // small queue
+		require.NotNil(t, out)
+		out.Start()
 
-	// 	submitTask := func() error {
-	// 		return out.Submit(func(ctx context.Context) {
-	// 			time.Sleep(1 * time.Millisecond) // simulate work
-	// 		})
-	// 	}
+		submitTask := func() error {
+			return out.Submit(func(ctx context.Context) {
+				time.Sleep(5 * time.Millisecond) // simulate work
+			})
+		}
 
-	// 	assert.NoError(t, submitTask())               // 1
-	// 	assert.NoError(t, submitTask())               // 2
-	// 	assert.NoError(t, submitTask())               // 3
-	// 	assert.NoError(t, submitTask())               // 4
-	// 	assert.NoError(t, submitTask())               // 5
-	// 	assert.ErrorIs(t, submitTask(), ErrQueueFull) // 6 - should be full now
+		errcount := 0
+		inconerr := func(err error) {
+			if err != nil && err == ErrQueueFull {
+				errcount++
+			}
+		}
 
-	// 	require.NoError(t, out.Shutdown())
-	// })
+		inconerr(submitTask()) // 1
+		inconerr(submitTask()) // 2
+		inconerr(submitTask()) // 3
+		inconerr(submitTask()) // 4
+		inconerr(submitTask()) // 5
 
-	// // coverage boost: task drained before shutdown
-	// t.Run("drain before shutdown", func(t *testing.T) {
-	// 	out := New(2, 5) // small queue
-	// 	require.NotNil(t, out)
-	// 	out.Start()
+		require.NotZero(t, errcount)
+	})
 
-	// 	submitTask := func(dur time.Duration) error {
-	// 		return out.Submit(func(ctx context.Context) {
-	// 			time.Sleep(dur) // simulate work
-	// 		})
-	// 	}
+	// coverage boost: task drained before shutdown
+	t.Run("drain before shutdown", func(t *testing.T) {
+		out := New(2, 5) // small queue
+		require.NotNil(t, out)
+		out.Start()
 
-	// 	assert.NoError(t, submitTask(1*time.Millisecond)) // 1
-	// 	assert.NoError(t, submitTask(1*time.Millisecond)) // 2
+		submitTask := func(dur time.Duration) error {
+			return out.Submit(func(ctx context.Context) {
+				time.Sleep(dur) // simulate work
+			})
+		}
 
-	// 	time.Sleep(2 * time.Millisecond) // wait for tasks to be drained
+		assert.NoError(t, submitTask(1*time.Millisecond)) // 1
+		assert.NoError(t, submitTask(1*time.Millisecond)) // 2
 
-	// 	require.NoError(t, out.Shutdown())
-	// })
+		time.Sleep(2 * time.Millisecond) // wait for tasks to be drained
+
+		require.NoError(t, out.Shutdown())
+	})
 }
 
 // helper

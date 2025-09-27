@@ -97,6 +97,7 @@ func (d *GracegoDelegator) Start() {
 					delegate(v)
 				}
 				d.wgexec.Wait()
+				d.pool.Release()
 				log.Println("event loop: all tasks completed")
 				return
 			}
