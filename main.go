@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/panjf2000/ants/v2"
@@ -12,8 +13,64 @@ func main() {
 	t0 := time.Now()
 
 	fmt.Println("starting...")
-	scenario_3()
+	scenario_4()
 	fmt.Printf("exited (%s)\n", time.Since(t0))
+}
+
+func scenario_4() {
+	fmt.Println("scenario: non-blocking with waiting using worker group")
+
+	// create a pool with 5 workers, non-blocking
+	pool, _ := ants.NewPool(0, ants.WithNonblocking(true))
+	defer pool.Release()
+
+	var wg sync.WaitGroup
+	taskCount := 10
+
+	for i := 0; i < taskCount; i++ {
+		idx := i
+		wg.Add(1)
+		// err must be ignored, because with non-blocking mode (https://pkg.go.dev/github.com/panjf2000/ants/v2#Options)
+		_ = pool.Submit(func() {
+			defer wg.Done()
+			log.Printf("Task %d starting\n", idx)
+			time.Sleep(2 * time.Second)
+			log.Printf("Task %d done\n", idx)
+		})
+	}
+
+	// doing other stuff
+	log.Println("doing other stuff")
+
+	// wait for all tasks to complete
+	wg.Wait()
+	log.Println("All tasks completed")
+
+	// starting...
+	// scenario: non-blocking with waiting
+	// 2025/09/27 09:27:49 Task 4 starting
+	// 2025/09/27 09:27:49 Task 1 starting
+	// 2025/09/27 09:27:49 Task 5 starting
+	// 2025/09/27 09:27:49 Task 6 starting
+	// 2025/09/27 09:27:49 Task 7 starting
+	// 2025/09/27 09:27:49 Task 8 starting
+	// 2025/09/27 09:27:49 Task 3 starting
+	// 2025/09/27 09:27:49 Task 0 starting
+	// 2025/09/27 09:27:49 Task 2 starting
+	// 2025/09/27 09:27:49 doing other stuff
+	// 2025/09/27 09:27:49 Task 9 starting
+	// 2025/09/27 09:27:51 Task 9 done
+	// 2025/09/27 09:27:51 Task 5 done
+	// 2025/09/27 09:27:51 Task 6 done
+	// 2025/09/27 09:27:51 Task 7 done
+	// 2025/09/27 09:27:51 Task 8 done
+	// 2025/09/27 09:27:51 Task 3 done
+	// 2025/09/27 09:27:51 Task 0 done
+	// 2025/09/27 09:27:51 Task 2 done
+	// 2025/09/27 09:27:51 Task 4 done
+	// 2025/09/27 09:27:51 Task 1 done
+	// 2025/09/27 09:27:51 All tasks completed
+	// exited (2.002275667s)
 }
 
 func scenario_3() {
