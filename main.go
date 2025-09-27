@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"sync"
 	"time"
 
+	"github.com/mekariavre/poc-graceful-offloaded-task-runners/gracego"
 	"github.com/panjf2000/ants/v2"
 )
 
@@ -13,8 +15,73 @@ func main() {
 	t0 := time.Now()
 
 	fmt.Println("starting...")
-	scenario_4a()
-	fmt.Printf("exited (%s)\n", time.Since(t0))
+	scenario_6()
+	log.Printf("exited (%s)\n", time.Since(t0))
+}
+
+func scenario_6() {
+	delegator := gracego.New(4, 10000) // 4 workers, queue size 10000 task items
+	delegator.Start()
+
+	for i := 0; i < 10; i++ {
+		idx := i
+		_ = delegator.Submit(func(ctx context.Context) {
+			log.Printf("task (light) %d started\n", idx)
+			time.Sleep(100 * time.Millisecond)
+			log.Printf("task (light) %d finished\n", idx)
+		})
+	}
+
+	// submit some heavy tasks
+	for i := 0; i < 5; i++ {
+		idx := i
+		_ = delegator.Submit(func(ctx context.Context) {
+			log.Printf("task (heavy) %d started\n", idx)
+			time.Sleep(2 * time.Second)
+			log.Printf("task (heavy) %d finished\n", idx)
+		})
+	}
+
+	// doing other stuff
+	log.Println("doing other stuff here!")
+
+	if err := delegator.Shutdown(); err != nil {
+		log.Println("Shutdown error:", err)
+	}
+
+	// starting...
+	// 2025/09/27 17:05:48.500896 doing other stuff here!
+	// 2025/09/27 17:05:48.500995 task (light) 3 started
+	// 2025/09/27 17:05:48.501001 task (light) 2 started
+	// 2025/09/27 17:05:48.501004 task (light) 0 started
+	// 2025/09/27 17:05:48.501031 task (light) 1 started
+	// 2025/09/27 17:05:48.602101 task (light) 0 finished
+	// 2025/09/27 17:05:48.602125 task (light) 4 started
+	// 2025/09/27 17:05:48.602128 task (light) 3 finished
+	// 2025/09/27 17:05:48.602129 task (light) 5 started
+	// 2025/09/27 17:05:48.602132 task (light) 2 finished
+	// 2025/09/27 17:05:48.602131 task (light) 1 finished
+	// 2025/09/27 17:05:48.602137 task (light) 7 started
+	// 2025/09/27 17:05:48.602133 task (light) 6 started
+	// 2025/09/27 17:05:48.703160 task (light) 6 finished
+	// 2025/09/27 17:05:48.703178 task (light) 8 started
+	// 2025/09/27 17:05:48.703148 task (light) 5 finished
+	// 2025/09/27 17:05:48.703185 task (light) 9 started
+	// 2025/09/27 17:05:48.703168 task (light) 4 finished
+	// 2025/09/27 17:05:48.703192 task (heavy) 0 started
+	// 2025/09/27 17:05:48.703170 task (light) 7 finished
+	// 2025/09/27 17:05:48.703208 task (heavy) 1 started
+	// 2025/09/27 17:05:48.804210 task (light) 8 finished
+	// 2025/09/27 17:05:48.804232 task (light) 9 finished
+	// 2025/09/27 17:05:48.804242 task (heavy) 2 started
+	// 2025/09/27 17:05:48.804272 task (heavy) 3 started
+	// 2025/09/27 17:05:50.703943 task (heavy) 0 finished
+	// 2025/09/27 17:05:50.703940 task (heavy) 1 finished
+	// 2025/09/27 17:05:50.703964 task (heavy) 4 started
+	// 2025/09/27 17:05:50.805293 task (heavy) 3 finished
+	// 2025/09/27 17:05:50.805314 task (heavy) 2 finished
+	// 2025/09/27 17:05:52.705098 task (heavy) 4 finished
+	// 2025/09/27 17:05:52.705269 exited (4.204364416s)
 }
 
 func scenario_5() {
@@ -256,7 +323,7 @@ func scenario_1() {
 	for i := 0; i < 20; i++ {
 		idx := i
 		_ = pool.Submit(func() {
-			fmt.Printf("Task %d running\n", idx)
+			log.Printf("Task %d running\n", idx)
 			time.Sleep(time.Second)
 		})
 	}
